@@ -1,5 +1,33 @@
 # TikTok Events SDK Flutter Plugin
 
+## Fork integration fixes and limitations
+
+This fork shares the complete SwiftPM Swift implementation with CocoaPods and
+pins both iOS dependency managers to native 1.7.2. Android uses native 1.7.1;
+build tool versions come from the host app. For AGP 9 hosts opting out of built-in
+Kotlin, `android.builtInKotlin=false` applies the host Kotlin Android plugin. Hosts
+must make JitPack available for group `com.github.tiktok`.
+
+Initialization now reports native callback success/failure, completes Flutter
+results on the main thread and rejects further process initialization attempts
+with `INIT_ALREADY_ATTEMPTED`, including after failure. This intentionally avoids
+retrying partially initialized native state; restart the process for a new attempt.
+A missing native callback completes with `INIT_TIMEOUT` after 15 seconds. Timeout
+only bounds the Flutter wait: native work may continue and retry remains blocked.
+
+`enableAutoIapTrack=false` now calls native `disableAutoIapTrack()`. **This is not a
+privacy guarantee.** Inspected official native purchase paths permit remote
+configuration to control collection; iOS payment tracking may likewise override
+the client preference. Runtime send switches are not durable consent boundaries.
+Do not initialize this SDK where purchase/EDP collection is forbidden without
+separately validating native collection vetoes, consent/revocation and device
+traffic. Linking a dependency is not proof of network silence.
+
+Regression checks in `test/native_contract_test.dart` verify source/build wiring,
+not native execution or privacy behavior. Native build and device validation are
+still required before deployment. The legacy `ios/Classes` tree is unused by both
+build paths; the shared source lives under `ios/tiktok_events_sdk/Sources`.
+
 [![pub package](https://img.shields.io/pub/v/tiktok_events_sdk.svg)](https://pub.dev/packages/tiktok_events_sdk)
 
 A Flutter plugin for integrating the **TikTok Events SDK** into your Flutter app. This plugin allows you to track in-app events, measure user engagement, and optimize your TikTok ad campaigns. It supports both **Android** and **iOS** platforms.
@@ -88,7 +116,7 @@ Starting from iOS 14, App Tracking Transparency (ATT) permission is required to 
 - **Identify user**: Easily associate events with specific users through custom identifiers and parameters.
 - **Debug Mode**: Test your event tracking before releasing your app.
 - **Logout**: Effortlessly clear user identification across both Android and iOS.
-- **Runtime consent controls**: Toggle tracking on/off after init with `setTrackingEnabled` to honor GDPR/CCPA opt-in/opt-out without restarting the SDK.
+- **Runtime send preference**: `setTrackingEnabled` is not a durable consent or collection boundary; remote configuration may override it.
 - **Manual flush**: Force-flush pending events with `flush()` before the app backgrounds or terminates.
 - **Access token rotation**: Update the access token at runtime with `updateAccessToken` — no re-initialization needed.
 - **Limited Data Use (LDU)**: Enable LDU mode at init to restrict data collection in privacy-sensitive jurisdictions.
@@ -120,7 +148,7 @@ final iosOptions = TikTokIosOptions(
 
 // Android options example
 final androidOptions = TikTokAndroidOptions(
-  enableAutoIapTrack: true, // enable IAP tracking
+  enableAutoIapTrack: true, // purchase collection permitted by app policy only
   disableAdvertiserIDCollection: false,
 );
 
@@ -137,11 +165,11 @@ await TikTokEventsSdk.initSdk(
 );
 ```
 
-> **Important:** By default the SDK starts tracking automatically right after `initSdk`. If you set `disableAutoStart: true` on Android (for example, to wait for user consent under GDPR/LGPD), the SDK will **not** send any events until you explicitly call `TikTokEventsSdk.startTrack()`. Forgetting this call is the most common reason events never reach the TikTok dashboard.
+> **Warning:** `disableAutoStart` defers a native send path only. Configuration traffic and collection may still occur; do not initialize before consent or treat this flag as a privacy boundary.
 
 #### Deferred start (manual consent flow)
 
-Use this pattern only if you need to wait for explicit user consent before any tracking begins:
+This only defers a native send path, not collection or configuration requests. Initialize only after consent; this is not a pre-consent integration pattern.
 
 ```dart
 final androidOptions = TikTokAndroidOptions(
@@ -159,7 +187,7 @@ await TikTokEventsSdk.startTrack();
 
 ### In-App Purchase (IAP)
 
-If you enable In-App Purchase (IAP) tracking (via enableAutoIapTrack: true in TikTokAndroidOptions), you must add the following dependency to your android/app/build.gradle:
+Only enable IAP when purchase collection is permitted by app policy. False sends a disable preference, not a durable veto against remote configuration. If IAP is enabled, add the following dependency to android/app/build.gradle:
 
 ```gradle
 dependencies {
@@ -237,7 +265,7 @@ await TikTokEventsSdk.logEvent(
 
 ### Runtime Tracking Controls
 
-After the SDK is initialized, you can toggle tracking on or off at runtime — typically to honor user consent under GDPR / CCPA without having to re-initialize the SDK.
+Runtime tracking switches are send preferences, not durable consent boundaries. Collection may continue and remote configuration may override them.
 
 ```dart
 // User opts out — stop sending events.
@@ -372,7 +400,7 @@ If your app has not been verified yet on the TikTok Events platform, only **Test
 
 ### 4. You set `disableAutoStart: true` but never call `startTrack()`
 
-On Android, `disableAutoStart: true` tells the native SDK to wait for explicit consent before sending anything. If you never call `TikTokEventsSdk.startTrack()` afterwards, no event will ever reach TikTok.
+On Android, `disableAutoStart` controls a send path, not all collection or configuration traffic. It is not a reliable consent boundary.
 
 **Fix:** Either remove `disableAutoStart: true` from your `TikTokAndroidOptions` (the SDK then starts automatically), or call `await TikTokEventsSdk.startTrack()` once the user has granted consent. See the [Deferred start](#deferred-start-manual-consent-flow) section above.
 

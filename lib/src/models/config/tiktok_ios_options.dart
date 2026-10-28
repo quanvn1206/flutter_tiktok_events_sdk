@@ -42,7 +42,9 @@ class TikTokIosOptions {
 
   /// Whether to disable payment tracking in the TikTok SDK.
   ///
-  /// If `true`, the SDK will not track in-app purchases or payment-related events.
+  /// Sends a native disable preference. Remote native configuration can override
+  /// payment collection; this is not a durable veto. Do not initialize this SDK
+  /// where purchase collection is forbidden without independent validation.
   final bool disablePaymentTracking;
 
   /// Whether to disable the App Tracking Transparency dialog in the TikTok SDK.

@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tiktok_events_sdk/tiktok_events_sdk.dart';
+import 'package:tiktok_events_sdk/src/bridge/tiktok_events_sdk_method_channel.dart';
+import 'package:tiktok_events_sdk/src/exceptions/tiktok_exception.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +20,35 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });
+
+  for (final code in [
+    'INIT_FAILED',
+    'INIT_ALREADY_ATTEMPTED',
+    'INIT_TIMEOUT',
+  ]) {
+    test('initSdk preserves native $code in TikTokException', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            expect(call.method, 'initialize');
+            throw PlatformException(code: code, message: 'Sanitized failure');
+          });
+      await expectLater(
+        MethodChannelTiktokEventsSdk().initSdk(
+          androidAppId: '123',
+          tikTokAndroidId: '456',
+          iosAppId: '123',
+          tiktokIosId: '456',
+        ),
+        throwsA(
+          isA<TikTokException>().having(
+            (exception) => (exception.error as PlatformException).code,
+            'native error code',
+            code,
+          ),
+        ),
+      );
+    });
+  }
 
   group('TikTokAndroidOptions', () {
     test('appSecret is null by default', () {

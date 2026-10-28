@@ -1,7 +1,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'tiktok_events_sdk'
-  s.version          = '1.3.0'
+  s.version          = '1.4.0'
   s.summary          = 'TikTok Events Manager for Flutter (iOS).'
   s.description      = <<-DESC
 iOS implementation of the TikTok Events Manager Flutter plugin.
@@ -10,7 +10,7 @@ iOS implementation of the TikTok Events Manager Flutter plugin.
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Marcelo Moresco' => 'marcelomoresco0@gmail.com' }
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  s.source_files = 'tiktok_events_sdk/Sources/tiktok_events_sdk/**/*.swift'
   s.dependency 'Flutter'
   s.platform = :ios, '15.0'
 
@@ -31,5 +31,5 @@ iOS implementation of the TikTok Events Manager Flutter plugin.
   }
 
   s.swift_version = '5.0'
-  s.dependency 'TikTokBusinessSDK', '~> 1.6.1'
+  s.dependency 'TikTokBusinessSDK', '1.7.2'
 end

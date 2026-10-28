@@ -67,6 +67,10 @@ sealed class TikTokMethod(
     private val tikTokErrorTag: String = "TikTok Error"
 
     object Initialize : TikTokMethod(type = TikTokMethodName.INITIALIZE) {
+        private val attempted = java.util.concurrent.atomic.AtomicBoolean(false)
+        private const val INIT_TIMEOUT_MS = 15_000L
+        private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+
         override fun call(
             context: Context,
             call: MethodCall,
@@ -113,9 +117,45 @@ sealed class TikTokMethod(
                     ttConfig.openDebugMode()
                 }
 
-                TikTokBusinessSdk.initializeSdk(ttConfig)
-                setIsInitialized(true)
-                result.success("TikTok SDK initialized!")
+                if (!attempted.compareAndSet(false, true)) {
+                    result.error("INIT_ALREADY_ATTEMPTED", "Initialization already attempted in this process.", null)
+                    return
+                }
+                if (TikTokBusinessSdk.isInitialized()) {
+                    setIsInitialized(true)
+                    result.error("INIT_ALREADY_ATTEMPTED", "Native SDK is already initialized.", null)
+                    return
+                }
+                val completed = java.util.concurrent.atomic.AtomicBoolean(false)
+                lateinit var watchdog: Runnable
+                fun complete(success: Boolean, nativeCode: Int? = null, isTimeout: Boolean = false) {
+                    // Native work can finish after the Flutter watchdog result.
+                    if (success) setIsInitialized(true)
+                    if (!completed.compareAndSet(false, true)) return
+                    mainHandler.removeCallbacks(watchdog)
+                    mainHandler.post {
+                        if (success) {
+                            setIsInitialized(true)
+                            result.success("TikTok SDK initialized!")
+                        } else {
+                            result.error(
+                                if (isTimeout) "INIT_TIMEOUT" else "INIT_FAILED",
+                                if (isTimeout) "TikTok SDK initialization timed out." else "TikTok SDK initialization failed.",
+                                nativeCode?.let { mapOf("nativeCode" to nativeCode) },
+                            )
+                        }
+                    }
+                }
+                watchdog = Runnable { complete(false, isTimeout = true) }
+                mainHandler.postDelayed(watchdog, INIT_TIMEOUT_MS)
+                try {
+                    TikTokBusinessSdk.initializeSdk(ttConfig, object : TikTokBusinessSdk.TTInitCallback {
+                        override fun success() = complete(true)
+                        override fun fail(code: Int, msg: String) = complete(false, code)
+                    })
+                } catch (e: Exception) {
+                    complete(false)
+                }
             } catch (e: Exception) {
                 // Show detailed error in debug mode, generic error in production
                 result.emitError("An error occurred during TikTok SDK initialization.", e, true)

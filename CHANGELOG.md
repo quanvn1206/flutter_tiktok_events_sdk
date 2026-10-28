@@ -1,3 +1,15 @@
+## Unreleased (fork)
+
+- Pin latest verified official native releases exactly: iOS 1.7.2, Android 1.7.1.
+- Compile the same complete Swift implementation with CocoaPods and SwiftPM.
+- Respect AGP 9 `android.builtInKotlin=false`; leave build tool versions to host.
+- Android `enableAutoIapTrack=false` now explicitly sends the native disable
+  preference (including the Dart default), rather than leaving native default-on.
+  This is not a durable privacy veto against remote native configuration.
+- Complete initialization from native callbacks on the main thread; reject repeat
+  process attempts and bound missing callbacks with `INIT_TIMEOUT` after 15s.
+  Timeout does not cancel native work or make retry safe; restart the process.
+
 ## 1.4.0
 
 - **Breaking:** Raised the minimum iOS deployment target from `14.0` to `15.0` (`podspec`, Swift Package `Package.swift`, and the example app). Apps still targeting iOS 14 must bump their own deployment target before upgrading.

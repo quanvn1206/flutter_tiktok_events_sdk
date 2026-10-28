@@ -2,32 +2,24 @@ import com.android.build.gradle.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-buildscript {
-    repositories {
-        gradlePluginPortal()
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.android.tools.build:gradle:8.13.0")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20")
-        classpath("com.github.ben-manes:gradle-versions-plugin:0.53.0")
-    }
-}
-
+// Build tool versions are owned by the consuming Flutter application.
 allprojects {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }
+        maven {
+            url = uri("https://jitpack.io")
+            content { includeGroup("com.github.tiktok") }
+        }
     }
 }
 
 apply(plugin = "com.android.library")
-apply(plugin = "com.github.ben-manes.versions")
 
 val agpVersion: String = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION
-if (agpVersion.split(".")[0].toInt() < 9) {
+val builtInKotlin = providers.gradleProperty("android.builtInKotlin")
+    .map(String::toBoolean).getOrElse(true)
+if (agpVersion.split(".")[0].toInt() < 9 || !builtInKotlin) {
     apply(plugin = "kotlin-android")
 }
 
@@ -74,7 +66,7 @@ tasks.withType<KotlinCompile>().configureEach {
 }
 
 dependencies {
-    "implementation"("com.github.tiktok:tiktok-business-android-sdk:1.6.1")
+    "implementation"("com.github.tiktok:tiktok-business-android-sdk:1.7.1")
     "implementation"("androidx.lifecycle:lifecycle-process:2.10.0")
     "testImplementation"("org.jetbrains.kotlin:kotlin-test")
     "testImplementation"("org.mockito:mockito-core:5.23.0")

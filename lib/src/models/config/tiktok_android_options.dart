@@ -49,7 +49,10 @@ class TikTokAndroidOptions {
 
   /// Whether to enable automatic in-app purchase (IAP) tracking in the TikTok SDK.
   ///
-  /// If `true`, the SDK will automatically track in-app purchases.
+  /// Maps `true` to native `enableAutoIapTrack()` and `false` to
+  /// `disableAutoIapTrack()`. This is a native configuration preference, not a
+  /// durable collection veto: remote SDK configuration can override purchase
+  /// behavior. Do not initialize this SDK where purchase collection is forbidden.
   final bool enableAutoIapTrack;
 
   /// Whether to disable advertiser ID collection in the TikTok SDK.
@@ -83,7 +86,8 @@ class TikTokAndroidOptions {
   /// Creates an instance of [TikTokAndroidOptions] with the specified configuration.
   ///
   /// All options are optional and default to `false`, meaning the corresponding features are enabled
-  /// (except for `enableAutoIapTrack`, which is disabled by default).
+  /// (except `enableAutoIapTrack`, which sends a native disable preference by
+  /// default; remote purchase behavior must still be validated separately).
   const TikTokAndroidOptions({
     this.appSecret,
     this.disableAutoStart = false,

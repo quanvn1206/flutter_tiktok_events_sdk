@@ -10,6 +10,7 @@ struct InitializeHandler {
     /// Thread-safe initialization state tracking
     private static let initializationQueue = DispatchQueue(label: "com.tiktok.events.sdk.initialization")
     private static var _isInitialized: Bool = false
+    private static var initializationAttempted = false
 
     /// Thread-safe getter for initialization state
     static func getIsInitialized() -> Bool {
@@ -71,36 +72,76 @@ struct InitializeHandler {
 
         ttConfig.setLogLevel(logLevel)
 
+        let canInitialize = initializationQueue.sync { () -> Bool in
+            guard !initializationAttempted else { return false }
+            initializationAttempted = true
+            return true
+        }
+        guard canInitialize else {
+            result(FlutterError(code: "INIT_ALREADY_ATTEMPTED", message: "Initialization already attempted in this process.", details: nil))
+            return
+        }
+        var completed = false
+        let initializationTimeout: TimeInterval = 15
+        var watchdog: DispatchWorkItem?
+        func claimCompletion() -> Bool {
+            let shouldComplete = initializationQueue.sync { () -> Bool in
+                guard !completed else { return false }
+                completed = true
+                return true
+            }
+            if shouldComplete {
+                watchdog?.cancel()
+                watchdog = nil
+            }
+            return shouldComplete
+        }
+        watchdog = DispatchWorkItem {
+            guard claimCompletion() else { return }
+            result(FlutterError(code: "INIT_TIMEOUT", message: "TikTok SDK initialization timed out.", details: nil))
+        }
+        if let watchdog = watchdog {
+            DispatchQueue.main.asyncAfter(deadline: .now() + initializationTimeout, execute: watchdog)
+        }
         TikTokBusiness.initializeSdk(ttConfig) { success, error in
-            if let error = error {
-                // Show detailed error in debug mode with verbose logging, generic error in production
-                TikTokErrorHelper.emitSecureError(
-                    code: "INIT_FAILED",
-                    genericMessage: "TikTok SDK initialization failed",
-                    error: error,
-                    isDebugMode: isDebugMode,
-                    logLevel: logLevel,
-                    result: result
-                )
-            } else {
-                setIsInitialized(true)
-                result("TikTok SDK initialized successfully!")
+            // Reflect native state even if the bounded Flutter wait has ended.
+            if success && error == nil { setIsInitialized(true) }
+            guard claimCompletion() else { return }
+            DispatchQueue.main.async {
+                if let error = error {
+                    // Show detailed error in debug mode with verbose logging, generic error in production
+                    TikTokErrorHelper.emitSecureError(
+                        code: "INIT_FAILED",
+                        genericMessage: "TikTok SDK initialization failed",
+                        error: error,
+                        isDebugMode: isDebugMode,
+                        logLevel: logLevel,
+                        result: result
+                    )
+                } else {
+                    guard success else {
+                        result(FlutterError(code: "INIT_FAILED", message: "TikTok SDK initialization failed.", details: nil))
+                        return
+                    }
+                    setIsInitialized(true)
+                    result("TikTok SDK initialized successfully!")
 
-                // Request ATT permission asynchronously after returning result
-                let displayAtt = options["displayAtt"] as? Bool ?? true
-                if displayAtt {
-                    let attStatus = ATTrackingManager.trackingAuthorizationStatus
-                    Logger.debugATT("🔵 Current ATT status: \(attStatus.rawValue)")
+                    // Request ATT permission asynchronously after returning result
+                    let displayAtt = options["displayAtt"] as? Bool ?? true
+                    if displayAtt {
+                        let attStatus = ATTrackingManager.trackingAuthorizationStatus
+                        Logger.debugATT("🔵 Current ATT status: \(attStatus.rawValue)")
 
-                    if attStatus == .notDetermined {
-                        Logger.debugATT("🔵 Requesting ATT permission in background...")
-                        DispatchQueue.main.async {
-                            ATTrackingManager.requestTrackingAuthorization { status in
-                                Logger.debugATT("🔵 ATT authorization result: \(status.rawValue)")
+                        if attStatus == .notDetermined {
+                            Logger.debugATT("🔵 Requesting ATT permission in background...")
+                            DispatchQueue.main.async {
+                                ATTrackingManager.requestTrackingAuthorization { status in
+                                    Logger.debugATT("🔵 ATT authorization result: \(status.rawValue)")
+                                }
                             }
+                        } else {
+                            Logger.debugATT("🔵 ATT already determined (status: \(attStatus.rawValue))")
                         }
-                    } else {
-                        Logger.debugATT("🔵 ATT already determined (status: \(attStatus.rawValue))")
                     }
                 }
             }

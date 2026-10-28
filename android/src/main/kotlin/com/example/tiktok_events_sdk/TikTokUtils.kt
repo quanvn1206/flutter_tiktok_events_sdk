@@ -28,7 +28,13 @@ object TikTokUtils {
             if (options["disableRetentionLogging"] as? Boolean == true) {
                 disableRetentionLogging()
             }
-            if (options["enableAutoIapTrack"] as? Boolean == true) enableAutoIapTrack()
+            // This selects the native preference, not a durable privacy veto:
+            // native remote configuration can still control purchase collection.
+            when (options["enableAutoIapTrack"] as? Boolean) {
+                true -> enableAutoIapTrack()
+                false -> disableAutoIapTrack()
+                null -> Unit
+            }
             if (options["disableAdvertiserIDCollection"] as? Boolean == true) {
                 disableAdvertiserIDCollection()
             }

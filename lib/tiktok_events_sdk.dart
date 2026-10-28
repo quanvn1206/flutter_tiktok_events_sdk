@@ -126,8 +126,9 @@ class TikTokEventsSdk {
 
   /// Enables or disables event tracking at runtime.
   ///
-  /// Use this to honor user consent decisions (GDPR/CCPA) after the SDK has
-  /// already been initialized. When disabled, the SDK stops sending events.
+  /// Changes the native runtime send preference, not a durable consent boundary.
+  /// Collection may continue and remote configuration may override native state.
+  /// Do not initialize before consent or rely on this for consent withdrawal.
   ///
   /// - [enabled]: `true` to enable tracking, `false` to disable.
   static Future<void> setTrackingEnabled({required bool enabled}) async {
